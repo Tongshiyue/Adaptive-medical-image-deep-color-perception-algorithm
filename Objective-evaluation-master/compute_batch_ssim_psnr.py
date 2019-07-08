@@ -92,122 +92,21 @@ if __name__ == "__main__":
     for i in range(count):
         im1 = images1[i]
         im2 = images2[i]
-        im2 = im2.resize([224,224],Image.ANTIALIAS)
         ssim = compute_ssim(np.array(im1),np.array(im2))
         SSIM.append(ssim)
         psnr = compute_psnr(np.array(im1),np.array(im2))
         PSNR.append(psnr)
-        # eng = matlab.engine.start_matlab()
-        # im1_mat = matlab.double(np.array(im1).tolist())
-        # im2_mat = matlab.double(np.array(im2).tolist())
-        # fsimc = eng.FeatureSIM(im2_mat,im1_mat)
-        # FSIMc.append(fsimc)
+        eng = matlab.engine.start_matlab()
+        im1_mat = matlab.double(np.array(im1).tolist())
+        im2_mat = matlab.double(np.array(im2).tolist())
+        fsimc = eng.FeatureSIM(im2_mat,im1_mat)
+        FSIMc.append(fsimc)
     print('Average SSIM is %.3f' % np.mean(SSIM))
     print('std SSIM is %.3f' % np.std(SSIM))
     print('Average PSNR is %.3f' % np.mean(PSNR))
     print('std PSNR is %.3f' % np.std(PSNR))
-    # print('Average FSIMc is %.3f' % np.mean(FSIMc))
-    # print('std FSIMc is %.3f' % np.std(FSIMc))
+    print('Average FSIMc is %.3f' % np.mean(FSIMc))
+    print('std FSIMc is %.3f' % np.std(FSIMc))
 
-    loss1,loss2,loss3,loss4,loss5,loss6= pickle.load(open('norm_psnr30before.pkl'))
-    losses = [loss1,loss2,loss3,PSNR,loss5,loss6]
-    with open('norm_psnr30before.pkl', 'w')as f:
-        pickle.dump(losses, f)
-    #
-    loss1,loss2,loss3,loss4,loss5,loss6= pickle.load(open('norm_ssim30before.pkl'))
-    losses = [loss1,loss2,loss3,SSIM,loss5,loss6]
-    with open('norm_ssim30before.pkl', 'w')as f:
-        pickle.dump(losses, f)
+  
 
-    # loss1 = pickle.load(open('11111_fsim.pkl'))
-    # losses = [loss1,FSIMc]
-    # with open('11111_fsim.pkl', 'w')as f:
-    #     pickle.dump(losses, f)
-
-
-    # loss1,loss2,loss3,loss4,loss5,loss6 = pickle.load(open('loss_psnr.pkl'))
-    # losses = [PSNR,loss2,loss3,loss4,loss5,loss6]
-    # with open('loss_psnr.pkl', 'w')as f:
-    #     pickle.dump(losses, f)
-    # loss1,loss2,loss3,loss4,loss5,loss6 = pickle.load(open('loss_ssim.pkl'))
-    # losses = [SSIM,loss2,loss3,loss4,loss5,loss6]
-    # with open('loss_ssim.pkl', 'w')as f:
-    #     pickle.dump(losses, f)
-
-
-
-    # plt.boxplot((loss3,loss4,loss2,loss5,loss1,loss6),labels=('CT(L1)','CT(L2)','Glioma(L1)','Glioma(L2)','ULT(L1)','ULT(L2)'))
-    # plt.savefig('loss_ssim2.pdf',bbox_inches='tight',dpi=1024)
-
-    # plt.figure(figsize=(10,6))
-    # plt.plot(loss1,color='r',linewidth=2,label="Glioma(L_color+L_y)")
-    # plt.plot(loss2,color='g',linewidth=2,label="ADNI(L_color+L_y)")
-    #
-    # plt.plot(loss4,color='y',linewidth=2,label="Glioma(L_color+L_y+L_cswap)")
-    # plt.plot(loss3, color='gray', linewidth=2, label="ADNI(L_color+L_y+L_cswap)")
-    #
-    # plt.plot(loss5,color='blue',linewidth=2,label="Glioma(L_c+L_color+L_y+L_cswap)")
-    # plt.plot(loss6,color='black',linewidth=2,label="ADNI(L_c+L_color+L_y+L_cswap)")
-    # plt.legend(loc=1)
-    # plt.xlabel("index number")
-    # plt.ylabel("PSNR")
-    # plt.xticks(np.arange(0,30,1))
-    # plt.title("PSNRs of images")
-    # plt.savefig('PSNRs_images.jpg',bbox_inches='tight',dpi=1024)
-
-
-    # path = "./c"
-    # name = []
-    # for dirpath, dirnames, filenames in os.walk(path):
-    #     for dirname in dirnames:
-    #         for dirpath2, _, filenames2 in os.walk(os.path.join(dirpath, dirname)):
-    #             for filename in filenames2:
-    #                 name.append(filename)
-    # color = []
-    # target = []
-    # FSIMc = []
-    # SSIM = []
-    # PSNR = []
-    # lname = len(name)
-    # c = lname //2
-    # target.append(name[0:c])
-    # color.append(name[c:])
-    # target = np.squeeze(target)
-    # color = np.squeeze(color)
-    # l = len(target)
-    # for i in range(l):
-    #     # t = os.path.join(path,"datasets",str(target[i]))
-    #     # c = os.path.join(path,"datasetsc",str(color[i]))
-    #     t = os.path.join(path,"ADNI",str(target[i]))
-    #     c = os.path.join(path,"ADNIC",str(color[i]))
-    #
-    #     eng = matlab.engine.start_matlab()
-    #     fsimc = eng.FeatureSIM(t,c)
-    #     psnr = eng.metrix_psnr(t,c)
-    #     ssim = eng.metrix_ssim(t,c)
-    #     PSNR.append(psnr)
-    #     SSIM.append(ssim)
-    #     FSIMc.append(fsimc)
-    #
-    # print('Average SSIM is %.3f' % np.mean(SSIM))
-    # print('std SSIM is %.3f' % np.std(SSIM))
-    # print('Average PSNR is %.3f' % np.mean(PSNR))
-    # print('std PSNR is %.3f' % np.std(PSNR))
-    # print('Average FSIMc is %.3f' % np.mean(FSIMc))
-    # print('std FSIMc is %.3f' % np.std(FSIMc))
-    # print(SSIM)
-
-    # loss1,loss2,loss3,loss4,loss5,loss6 = pickle.load(open('loss_psnr.pkl'))
-    # losses = [loss1,loss2,loss3,loss4,loss5,loss6,PSNR]
-    # with open('loss_psnr.pkl', 'w')as f:
-    #     pickle.dump(losses, f)
-    #
-    # loss1,loss2,loss3,loss4,loss5,loss6= pickle.load(open('loss_ssim.pkl'))
-    # losses = [loss1,loss2,loss3,loss4,loss5,SSIM]
-    # with open('loss_ssim.pkl', 'w')as f:
-    #     pickle.dump(losses, f)
-    #
-    # loss1,loss2,loss3,loss4,loss5= pickle.load(open('loss_fsimc.pkl'))
-    # losses = [loss1,loss2,loss3,loss4,loss5,FSIMc]
-    # with open('loss_fsimc.pkl', 'w')as f:
-    #     pickle.dump(losses, f)
