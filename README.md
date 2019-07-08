@@ -54,4 +54,4 @@ and
 >}
 #Contact
 
-Feel free to cintact me if you need the whole code or there is any question (tongshiyue.tsy@gmail.com)
+Feel free to contact me if you need the whole code or there is any question (tongshiyue.tsy@gmail.com)
