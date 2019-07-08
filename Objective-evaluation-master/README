@@ -1,0 +1,2 @@
+This is the folder of calculating Objective evaluation.
+By running compute_batch_ssim_psnr.py can get Objective evaluation of our result on the paper.
