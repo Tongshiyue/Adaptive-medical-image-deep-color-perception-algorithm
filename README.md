@@ -26,11 +26,11 @@ CUDA backend:
 The VGG-19 model of tensorflow is adopted from [VGG Tensorflow](https://github.com/machrisaa/tensorflow-vgg) with few modifications on the class interface. The VGG-19 model weights is stored as .npy file and could be download from [Google Drive](https://drive.google.com/file/d/0BxvKyd83BJjYY01PYi1XQjB5R0E/view) or [BaiduYun Pan](https://pan.baidu.com/s/1o9weflK). After downloading, you need fine tune the weight of VGG19 by medical images. Then copy the fine-tuned weight file to the ./project/vgg19 directory.
 
 
-#Acknowledgement
+# Acknowledgement
 
 We encode our code build upon [LouieYang/deep-photo-styletransfer-tf](https://github.com/LouieYang/deep-photo-styletransfer-tf)
 
-#Citation
+# Citation
 
 If you find this code useful for your research, please cite:
 
@@ -53,6 +53,6 @@ and
 >  howpublished = {\url{https://github.com/Tongshiyue/Adaptive-medical-image-deep-color-perception-algorithm}}
 >}
 
-#Contact
+# Contact
 
 Feel free to contact me if you need the whole code or there is any question (tongshiyue.tsy@gmail.com)
