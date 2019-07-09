@@ -25,6 +25,24 @@ CUDA backend:
 
 The VGG-19 model of tensorflow is adopted from [VGG Tensorflow](https://github.com/machrisaa/tensorflow-vgg) with few modifications on the class interface. The VGG-19 model weights is stored as .npy file and could be download from [Google Drive](https://drive.google.com/file/d/0BxvKyd83BJjYY01PYi1XQjB5R0E/view) or [BaiduYun Pan](https://pan.baidu.com/s/1o9weflK). After downloading, you need fine tune the weight of VGG19 by medical images. Then copy the fine-tuned weight file to the ./project/vgg19 directory.
 
+# Usage
+
+## Basic Usage
+
+You need to specift the path of the content image and then run the command
+
+```python
+python Adaptive_MIdeepcolor.py --content_image_path <path_to_content_image> --color_option 2
+```
+
+Example:
+
+```python
+python Adaptive_MIdeepcolor.py --content_image_path ./ct.jpg --style_option 2
+```
+## Other Options
+
+
 
 # Acknowledgement
 
