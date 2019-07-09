@@ -47,8 +47,7 @@ python Adaptive_MIdeepcolor.py --content_image_path ./ct.jpg --color_option 2
 
 `--content_weight` specifies the weight of the content loss (default=1), `--color_weight` specifies the weight of the style loss (default=100), `--tv_weight` specifies the weight of variational loss (default=1e-3) and `--Y-loss_weight` specifies the weight of Y-loss loss (default=1e5). You can change the values of these weight and play with them to create different photos. `--swapweight` specifies the weight of swap loss (default=1e1). You can change the values of these weight and play with them to create better photos.
 
-#Examples
-Here are more results from our algorithm.
+
 
 
 # Acknowledgement
