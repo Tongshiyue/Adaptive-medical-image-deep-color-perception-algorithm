@@ -63,8 +63,8 @@ parser.add_argument("--swapweight",      dest='swapweight',       nargs='?', typ
                     help="weight of swap loss", default=1e1)
 
 # Style Options
-parser.add_argument("--style_option",       dest='style_option',        nargs='?', type=int,
-                    help="0=non-Matting, 1=only Matting, 2=first non-Matting, then Matting", default=1)
+parser.add_argument("--color_option",       dest='color_option',        nargs='?', type=int,
+                    help="0=non-Y-loss, 1=only Y-loss, 2=first non-Y-loss, then add Y-loss", default=2)
 parser.add_argument("--apply_smooth",       dest='apply_smooth',        nargs='?',
                     help="if apply local affine smooth", default=True)
 
@@ -113,19 +113,19 @@ def index(imagespath,db_shelve):
 
 def main():
     Image_high = Image_Weigh = 224
-    if args.style_option == 0:
+    if args.color_option == 0:
         index(args.images_dataset,args.db_shelve)
         args.max_iter = 1 * args.max_iter
-        best_image_bgr = stylize(args, False)
+        best_image_bgr = colorization(args, False)
 		result = Image.fromarray(np.uint8(np.clip(best_image_bgr[:, :, ::-1], 0, 255.0)))
         result.save(args.output_image)
 
-    elif args.style_option == 1:
+    elif args.color_option == 1:
         index(args.images_dataset, args.db_shelve)
         args.max_iter = 1 * args.max_iter
         args.init_image_path = os.path.join(args.serial, "tmp_result.png")
 
-        best_image_bgr = stylize(args, True)
+        best_image_bgr = colorization(args, True)
         if not args.apply_smooth:
             result = Image.fromarray(np.uint8(np.clip(best_image_bgr[:, :, ::-1], 0, 255.0)))
             result.save(args.output_image)
@@ -147,16 +147,16 @@ def main():
             best_ = smooth_local_affine(output_, input_, 1e-7, 3, H, W, args.f_radius, args.f_edge).transpose(1, 2, 0)
             result = Image.fromarray(np.uint8(np.clip(best_ * 255., 0, 255.)))
             result.save(args.output_image)
-    elif args.style_option == 2:
+    elif args.color_option == 2:
         index(args.images_dataset, args.db_shelve)
         args.max_iter = 1 * args.max_iter
-        tmp_image_bgr= stylize(args, False)
+        tmp_image_bgr= colorization(args, False)
 
         result = Image.fromarray(np.uint8(np.clip(tmp_image_bgr[:, :, ::-1], 0, 255.0)))
         args.init_image_path = os.path.join(args.serial, "tmp_result.png")
         result.save(args.init_image_path)
         args.max_iter = 1 * args.max_iter
-        best_image_bgr = stylize(args, True)
+        best_image_bgr = colorization(args, True)
 
 
         if not args.apply_smooth:
