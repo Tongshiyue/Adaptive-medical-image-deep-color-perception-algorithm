@@ -57,8 +57,8 @@ parser.add_argument("--style_weight",       dest='style_weight',        nargs='?
                     help="weight of style loss", default=1e2)
 parser.add_argument("--tv_weight",          dest='tv_weight',           nargs='?', type=float,
                     help="weight of total variational loss", default=1e-3)
-parser.add_argument("--affine_weight",      dest='affine_weight',       nargs='?', type=float,
-                    help="weight of affine loss", default=1e5)
+parser.add_argument("--Y-loss_weight",      dest='Y-loss_weight',       nargs='?', type=float,
+                    help="weight of Y-loss loss", default=1e5)
 parser.add_argument("--swapweight",      dest='swapweight',       nargs='?', type=float,
                     help="weight of swap loss", default=1e1)
 
