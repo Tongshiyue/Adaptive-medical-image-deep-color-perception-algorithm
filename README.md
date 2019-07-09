@@ -45,7 +45,11 @@ python Adaptive_MIdeepcolor.py --content_image_path ./ct.jpg --color_option 2
 `--color_option` specifies three different ways of medical image colorization. `--color_option 0` is to generate colored medical image without Y-loss. This result is similary to artistic work, its texture details can't be preserved. `--color_option 1` is to generate colored medical image with Y-loss, its texture details is preserved.
 `--color_option 2` is to set the generated result of `--color_option 0` as the initial image of `--color_option 1`, then use Y-loss to constrain texture details.
 
-`--content_weight` specifies the weight of the content loss (default=1), `--color_weight` specifies the weight of the style loss (default=100), `--tv_weight` specifies the weight of variational loss (default=1e-3) and `-- Y-loss_weight` specifies the weight of Y-loss loss (default=1e5). You can change the values of these weight and play with them to create different photos.
+`--content_weight` specifies the weight of the content loss (default=1), `--color_weight` specifies the weight of the style loss (default=100), `--tv_weight` specifies the weight of variational loss (default=1e-3) and `--Y-loss_weight` specifies the weight of Y-loss loss (default=1e5). You can change the values of these weight and play with them to create different photos. `--swapweight` specifies the weight of swap loss (default=1e1). You can change the values of these weight and play with them to create better photos.
+
+#Examples
+Here are more results from our algorithm.
+
 
 # Acknowledgement
 
