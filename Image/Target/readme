@@ -1,0 +1,2 @@
+There are some target image that we use in our result.
+Some of images change the size of image to 224*224. If you have original images of MRI, CT, ULT, you don't neet to change the size of them.
