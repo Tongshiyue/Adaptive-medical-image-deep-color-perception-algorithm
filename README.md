@@ -34,12 +34,12 @@ The VGG-19 model of tensorflow is adopted from [VGG Tensorflow](https://github.c
 You need to specify the path of content image, style image, content image segmentation, style image segmentation and then run the command
 
 ```
-python deep_photostyle.py --content_image_path <path_to_content_image> --style_image_path <path_to_style_image> --content_seg_path <path_to_content_segmentation> --style_seg_path <path_to_style_segmentation> --style_option 2
+python Adaptive_MIdeepcolor.py --content_image_path <path_to_content_image> --style_image_path <path_to_style_image> --content_seg_path <path_to_content_segmentation> --style_seg_path <path_to_style_segmentation> --style_option 2
 ```
 
 *Example:*
 ```
-python deep_photostyle.py --content_image_path ./examples/input/in11.png --style_image_path ./examples/style/tar11.png --content_seg_path ./examples/segmentation/in11.png --style_seg_path ./examples/segmentation/tar11.png --style_option 2
+python Adaptive_MIdeepcolor.py --content_image_path ./examples/input/in11.png --style_image_path ./examples/style/tar11.png --content_seg_path ./examples/segmentation/in11.png --style_seg_path ./examples/segmentation/tar11.png --style_option 2
 ```
 
 ### Other Options
@@ -50,7 +50,7 @@ python deep_photostyle.py --content_image_path ./examples/input/in11.png --style
 
 `--serial` specifies the folder that you want to store the temporary result **out_iter_XXX.png**. The default value of it is `./`. You can simply `mkdir result` and set `--serial ./result` to store them. **Again, the temporary results are simply clipping the image into [0, 255] without smoothing. Since for now, the smoothing operations need pycuda and pycuda will have conflict with tensorflow when using single GPU**
 
-Run `python deep_photostyle.py --help` to see a list of all options
+Run `python Adaptive_MIdeepcolor.py --help` to see a list of all options
 
 ### Image Segmentation
 This repository doesn't offer image segmentation script and simply use the segmentation image from the [torch version](https://github.com/luanfujun/deep-photo-styletransfer). The mask colors used are also the same as them. You could specify your own segmentation model and mask color to customize your own style transfer.
