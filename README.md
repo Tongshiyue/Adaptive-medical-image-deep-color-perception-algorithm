@@ -78,5 +78,5 @@ and
 
 # Contact
 
-Feel free to contact me if you need the whole code or there is any question (zengxh@cqupt.edu.cn)
+Feel free to contact me if you have any question (zengxh@cqupt.edu.cn)
 
