@@ -1,7 +1,6 @@
 # Adaptive-medical-image-deep-color-perception-algorithm
 "Adaptive medical image deep color perception algorithm"
-
-This is a part of our code, if you need whole code, you can email author. 
+ 
 
 # Setup
 This code is based on tensorflow. It has been tested on Ubuntu 14.04 LTS.
