@@ -9,9 +9,8 @@ import time
 from functools import partial
 import copy
 import os
-from style_swap import *
+from color_swap import *
 import matlab.engine
-from closed_form_matting import getLaplacian
 import imagehash
 import argparse
 import shelve
@@ -39,7 +38,7 @@ def bgr2rgb(bgr, vgg_mean=False):
     else:
         return bgr[:, :, ::-1]
 
-def load_seg(content_seg_path, style_seg_path, content_shape, style_shape):
+def load_seg(content_seg_path, color_seg_path, content_shape, color_shape):
     color_codes = ['BLUE', 'GREEN', 'BLACK', 'WHITE', 'RED', 'YELLOW', 'GREY', 'LIGHT_BLUE', 'PURPLE']
     def _extract_mask(seg, color_str):
         h, w, c = np.shape(seg)
@@ -86,15 +85,14 @@ def load_seg(content_seg_path, style_seg_path, content_shape, style_shape):
 
     # PIL resize has different order of np.shape
     content_seg = np.array(Image.open(content_seg_path).convert("RGB").resize(content_shape, resample=Image.BILINEAR), dtype=np.float32) / 255.0
-    style_seg = np.array(Image.open(style_seg_path).convert("RGB").resize(style_shape, resample=Image.BILINEAR), dtype=np.float32) / 255.0
+    color_seg = np.array(Image.open(color_seg_path).convert("RGB").resize(color_shape, resample=Image.BILINEAR), dtype=np.float32) / 255.0
 
     color_content_masks = []
-    color_style_masks = []
+    color_color_masks = []
     for i in xrange(len(color_codes)):
         color_content_masks.append(tf.expand_dims(tf.expand_dims(tf.constant(_extract_mask(content_seg, color_codes[i])), 0), -1))
-        color_style_masks.append(tf.expand_dims(tf.expand_dims(tf.constant(_extract_mask(style_seg, color_codes[i])), 0), -1))
-
-    return color_content_masks, color_style_masks
+        color_color_masks.append(tf.expand_dims(tf.expand_dims(tf.constant(_extract_mask(color_seg, color_codes[i])), 0), -1))
+    return color_content_masks, color_color_masks
 
 def gram_matrix(activations):
     height = tf.shape(activations)[1]
@@ -106,50 +104,48 @@ def gram_matrix(activations):
     return gram_matrix
 
 def content_loss(const_layer, var_layer, weight):
-    # const_max = tf.reduce_max(const_layer)
-    # var_max = tf.reduce_max(var_layer)                  /const_max         /var_max
     return 0.5 * tf.reduce_mean(tf.squared_difference(const_layer, var_layer)) * weight
 
-def style_loss(CNN_structure, const_layers, var_layers, content_segs, style_segs, weight):
-    loss_styles = []
+def color_loss(CNN_structure, const_layers, var_layers, content_segs, color_segs, weight):
+    loss_colors = []
     layer_count = float(len(const_layers))
     layer_index = 0
 
     _, content_seg_height, content_seg_width, _ = content_segs[0].get_shape().as_list()
-    _, style_seg_height, style_seg_width, _ = style_segs[0].get_shape().as_list()
+    _, color_seg_height, color_seg_width, _ = color_segs[0].get_shape().as_list()
     for layer_name in CNN_structure:
         layer_name = layer_name[layer_name.find("/") + 1:]
 
         # downsampling segmentation
         if "pool" in layer_name:
             content_seg_width, content_seg_height = int(math.ceil(content_seg_width / 2)), int(math.ceil(content_seg_height / 2))
-            style_seg_width, style_seg_height = int(math.ceil(style_seg_width / 2)), int(math.ceil(style_seg_height / 2))
+            color_seg_width, color_seg_height = int(math.ceil(color_seg_width / 2)), int(math.ceil(color_seg_height / 2))
 
             for i in xrange(len(content_segs)):
                 content_segs[i] = tf.image.resize_bilinear(content_segs[i], tf.constant((content_seg_height, content_seg_width)))
-                style_segs[i] = tf.image.resize_bilinear(style_segs[i], tf.constant((style_seg_height, style_seg_width)))
+                color_segs[i] = tf.image.resize_bilinear(color_segs[i], tf.constant((color_seg_height, color_seg_width)))
 
         elif "conv" in layer_name:
             for i in xrange(len(content_segs)):
                 # have some differences on border with torch
                 content_segs[i] = tf.nn.avg_pool(tf.pad(content_segs[i], [[0, 0], [1, 1], [1, 1], [0, 0]], "CONSTANT"), \
                 ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='VALID')
-                style_segs[i] = tf.nn.avg_pool(tf.pad(style_segs[i], [[0, 0], [1, 1], [1, 1], [0, 0]], "CONSTANT"), \
+                color_segs[i] = tf.nn.avg_pool(tf.pad(color_segs[i], [[0, 0], [1, 1], [1, 1], [0, 0]], "CONSTANT"), \
                 ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1], padding='VALID')
 
         if layer_name == var_layers[layer_index].name[var_layers[layer_index].name.find("/") + 1:]:
-            print("Setting up style layer: <{}>".format(layer_name))
+            print("Setting up color layer: <{}>".format(layer_name))
             const_layer = const_layers[layer_index]
             var_layer = var_layers[layer_index]
 
             layer_index = layer_index + 1
 
-            layer_style_loss = 0.0
-            for content_seg, style_seg in zip(content_segs, style_segs):
-                gram_matrix_const = gram_matrix(tf.multiply(const_layer, style_seg))
-                style_mask_mean   = tf.reduce_mean(style_seg)
-                gram_matrix_const = tf.cond(tf.greater(style_mask_mean, 0.),
-                                        lambda: gram_matrix_const / (tf.to_float(tf.size(const_layer)) * style_mask_mean),
+            layer_color_loss = 0.0
+            for content_seg, color_seg in zip(content_segs, color_segs):
+                gram_matrix_const = gram_matrix(tf.multiply(const_layer, color_seg))
+                color_mask_mean   = tf.reduce_mean(color_seg)
+                gram_matrix_const = tf.cond(tf.greater(color_mask_mean, 0.),
+                                        lambda: gram_matrix_const / (tf.to_float(tf.size(const_layer)) * color_mask_mean),
                                         lambda: gram_matrix_const
                                     )
 
@@ -160,15 +156,12 @@ def style_loss(CNN_structure, const_layers, var_layers, content_segs, style_segs
                                         lambda: gram_matrix_var
                                     )
 
-                diff_style_sum    =0.5 * tf.reduce_mean(tf.squared_difference(gram_matrix_const, gram_matrix_var)) * content_mask_mean
+                diff_color_sum    =0.5 * tf.reduce_mean(tf.squared_difference(gram_matrix_const, gram_matrix_var)) * content_mask_mean
 
-                layer_style_loss += diff_style_sum
+                layer_color_loss += diff_color_sum
 
-            loss_styles.append(layer_style_loss * weight)
-    # loss_styles[1] = loss_styles[1] *0.001
-    # loss_styles[2] = loss_styles[2] *0.001
-    # loss_styles[3] = loss_styles[3] *0.001
-    return loss_styles
+            loss_colors.append(layer_color_loss * weight)
+    return loss_colors
 
 def total_variation_loss(output, weight):
     shape = output.get_shape()
@@ -193,46 +186,33 @@ def affine_loss(output, M, weight):
 iter_count = 0
 loss_content1 = []
 loss_yloss = []
-loss_styleloss = []
-loss_styleswaploss = []
+loss_colorloss = []
+loss_colorswaploss = []
 loss_overallloss = []
 min_loss, best_image = float("inf"), None
-# def print_loss(args, loss_content, loss_styles_list, loss_tv, ,loss_affine,styleswap_loss,overall_loss, output_image,output_image2,content_h):
-def print_loss(args,loss_content, loss_styles_list,loss_tv,loss_affine,styleswap_loss,overall_loss, output_image,loss_style):
-    global iter_count, min_loss, best_image, loss_content1, loss_yloss,loss_styleloss,loss_styleswaploss,loss_overallloss
+# def print_loss(args, loss_content, loss_colors_list, loss_tv, ,loss_affine,colorswap_loss,overall_loss, output_image,output_image2,content_h):
+def print_loss(args,loss_content, loss_colors_list,loss_tv,loss_affine,colorswap_loss,overall_loss, output_image,loss_color):
+    global iter_count, min_loss, best_image, loss_content1, loss_yloss,loss_colorloss,loss_colorswaploss,loss_overallloss
     if iter_count <= 500:
         loss_content1.append(loss_content)
         loss_yloss.append(loss_affine)
-        loss_styleloss.append(loss_style)
-        loss_styleswaploss.append(styleswap_loss)
+        loss_colorloss.append(loss_color)
+        loss_colorswaploss.append(colorswap_loss)
         loss_overallloss.append(overall_loss)
-
-
-        # loss_yloss.append(loss_affine)
-    # elif iter_count>1050:
-    #     loss_yloss = []
-    #     loss_styleswap = []
-    # elif iter_count > 1000 and iter_count <= 1500:
-    #     loss_content1.append(loss_affine)
 
     if iter_count % args.print_iter == 0:
         print('Iteration {} / {}\n\tContent loss: {}'.format(iter_count, args.max_iter, loss_content))
-        for j, style_loss in enumerate(loss_styles_list):
-            print('\tStyle {} loss: {}'.format(j + 1, style_loss))
+        for j, color_loss in enumerate(loss_colors_list):
+            print('\tcolor {} loss: {}'.format(j + 1, color_loss))
         print('\tTV loss: {}'.format(loss_tv))
-        # print('\tshape loss: {}'.format(shape_loss))
         print('\tAffine loss: {}'.format(loss_affine))
-        print('\tStyleswap loss: {}'.format(styleswap_loss))
+        print('\tcolorswap loss: {}'.format(colorswap_loss))
         print('\tTotal loss: {}'.format(overall_loss))
-        print('\tstyle loss: {}'.format(loss_style))
+        print('\tcolor loss: {}'.format(loss_color))
 
 
     if overall_loss < min_loss:
         min_loss, best_image = overall_loss, output_image
-
-    # if iter_count %3 == 0:
-    #     save_result(output_image2, "h.jpg")
-    #     save_result(content_h, "h2.jpg")
     if iter_count % args.save_iter == 0 and iter_count != 0:
         save_result(best_image[:, :, ::-1], os.path.join(args.serial, 'out_iter_{}_l1_swap.png'.format(iter_count)))
 
@@ -261,9 +241,9 @@ def y_loss(content_image,output_image,weight=1):
     output_image = tf.squeeze(output_image, [0])
     output_h = output_image[:,:,0]
 
-    return 0.5 * tf.reduce_mean(tf.squared_difference(content_h, output_h)) * weight , output_h,content_h
-    # return (0.5*tf.reduce_mean(tf.norm(tf.subtract(content_h,output_h),ord=1))+0.5* tf.reduce_mean(tf.squared_difference(content_h, output_h))) * weight, output_h,content_h
-    # return tf.reduce_mean(tf.norm(tf.subtract(content_h,output_h),ord=1)) * weight, output_h,content_h
+    return 0.5 * tf.reduce_mean(tf.squared_difference(content_h, output_h)) * weight , output_h,content_h  #l2 norm
+    # return (0.5*tf.reduce_mean(tf.norm(tf.subtract(content_h,output_h),ord=1))+0.5* tf.reduce_mean(tf.squared_difference(content_h, output_h))) * weight, output_h,content_h #0.5l1+0.5l2
+    # return tf.reduce_mean(tf.norm(tf.subtract(content_h,output_h),ord=1)) * weight, output_h,content_h	#l1 norm
 
 def search(dataset,db_shelve,query):
     h_list = []
@@ -285,11 +265,8 @@ def search(dataset,db_shelve,query):
         difference = int(h, 16) ^ int(h_s, 16)
         delth.append(bin(difference).count("1"))
     delth = np.array(delth)
-    # print(delth, delth[0])
     delth = np.argsort(delth)
-    # print(delth, delth[0])
     filenames = h_list[delth[0:1]]
-    # print(filenames, type(filenames))
     # filenames = db[filenames]
     print("Found %d images" % (len(filenames)))
 
@@ -300,12 +277,11 @@ def search(dataset,db_shelve,query):
         print(filename, type(filename))
         # image = Image.open(args["dataset"] + "/" + filename)
         image = Image.open(dataset + "/" + filename)
-        # image.show()
     # close the shelve database
     db.close()
     return os.path.join(dataset + "/" + filename)
 
-def stylize(args, Matting):
+def colorize(args, Matting):
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
@@ -317,30 +293,25 @@ def stylize(args, Matting):
     content_width, content_height = content_image.shape[1], content_image.shape[0]
     content_image1 = content_image
 
-    # if Matting:
-    #     M = tf.to_float(getLaplacian(content_image / 255.))
-
     content_image = rgb2bgr(content_image)
     content_image = content_image.reshape((1, content_height, content_width, 3)).astype(np.float32)
 
-    args.style_image_path = search(args.images_dataset, args.db_shelve, args.content_image_path)
+    args.color_image_path = search(args.images_dataset, args.db_shelve, args.content_image_path)
 
-    style_image = Image.open(args.style_image_path).convert("RGB")
-    style_image = style_image.resize([Image_Hight,Image_Weight],Image.ANTIALIAS)
-    style_image = rgb2bgr(np.array(style_image, dtype=np.float32))
-    style_width, style_height = style_image.shape[1], style_image.shape[0]
-    style_image = style_image.reshape((1, style_height, style_width, 3)).astype(np.float32)
+    color_image = Image.open(args.color_image_path).convert("RGB")
+    color_image = color_image.resize([Image_Hight,Image_Weight],Image.ANTIALIAS)
+    color_image = rgb2bgr(np.array(color_image, dtype=np.float32))
+    color_width, color_height = color_image.shape[1], color_image.shape[0]
+    color_image = color_image.reshape((1, color_height, color_width, 3)).astype(np.float32)
 
     # prepare segment images
     eng = matlab.engine.start_matlab()
     args.content_seg_path = eng.k_means_seg_image(args.content_image_path)
-    args.style_seg_path = eng.k_means_seg_image(args.style_image_path)
-    # print(args.style_seg_path)
-    # print(args.content_seg_path)
+    args.color_seg_path = eng.k_means_seg_image(args.color_image_path)
 
 
-    content_masks, style_masks = load_seg(args.content_seg_path, args.style_seg_path, [content_width, content_height], [style_width, style_height])
-    # os.remove(args.style_seg_path)
+    content_masks, color_masks = load_seg(args.content_seg_path, args.color_seg_path, [content_width, content_height], [color_width, color_height])
+    # os.remove(args.color_seg_path)
     # os.remove(args.content_seg_path)
 
 
@@ -366,15 +337,15 @@ def stylize(args, Matting):
         content_conv4_1_const = content_fv[5]
         content_conv5_1_const = content_fv[4]
 
-        vgg_const.build(tf.constant(style_image))
-        style_layers_const = [vgg_const.conv1_1, vgg_const.conv2_1, vgg_const.conv3_1, vgg_const.conv4_1, vgg_const.conv5_1]
-        style_fvs = sess.run(style_layers_const)
-        style_conv1_1_const = style_fvs[0]
-        style_conv2_1_const = style_fvs[1]
-        style_conv3_1_const = style_fvs[2]
-        style_conv4_1_const = style_fvs[3]
-        style_conv5_1_const = style_fvs[4]
-        style_layers_const = [tf.constant(fv) for fv in style_fvs]
+        vgg_const.build(tf.constant(color_image))
+        color_layers_const = [vgg_const.conv1_1, vgg_const.conv2_1, vgg_const.conv3_1, vgg_const.conv4_1, vgg_const.conv5_1]
+        color_fvs = sess.run(color_layers_const)
+        color_conv1_1_const = color_fvs[0]
+        color_conv2_1_const = color_fvs[1]
+        color_conv3_1_const = color_fvs[2]
+        color_conv4_1_const = color_fvs[3]
+        color_conv5_1_const = color_fvs[4]
+        color_layers_const = [tf.constant(fv) for fv in color_fvs]
 
 
 
@@ -383,13 +354,13 @@ def stylize(args, Matting):
         vgg_var.build(input_image)
 
     # which layers we want to use?
-    style_layers_var = [vgg_var.conv1_1, vgg_var.conv2_1, vgg_var.conv3_1, vgg_var.conv4_1, vgg_var.conv5_1]
+    color_layers_var = [vgg_var.conv1_1, vgg_var.conv2_1, vgg_var.conv3_1, vgg_var.conv4_1, vgg_var.conv5_1]
     content_layer_var = vgg_var.conv4_2
-    content_conv1_1_var = style_layers_var[0]
-    content_conv2_1_var = style_layers_var[1]
-    content_conv3_1_var = style_layers_var[2]
-    content_conv4_1_var = style_layers_var[3]
-    content_conv5_1_var = style_layers_var[4]
+    content_conv1_1_var = color_layers_var[0]
+    content_conv2_1_var = color_layers_var[1]
+    content_conv3_1_var = color_layers_var[2]
+    content_conv4_1_var = color_layers_var[3]
+    content_conv5_1_var = color_layers_var[4]
 
     # The whole CNN structure to downsample mask
     layer_structure_all = [layer.name for layer in vgg_var.get_all_layers()]
@@ -397,139 +368,67 @@ def stylize(args, Matting):
     # Content Loss
     loss_content = content_loss(content_layer_const, content_layer_var, float(args.content_weight))
 
-    # Style Loss
-    loss_styles_list = style_loss(layer_structure_all, style_layers_const, style_layers_var, content_masks, style_masks, float(args.style_weight))
-    loss_style = 0.0
-    for loss in loss_styles_list:
-        loss_style += loss
+    # color Loss
+    loss_colors_list = color_loss(layer_structure_all, color_layers_const, color_layers_var, content_masks, color_masks, float(args.color_weight))
+    loss_color = 0.0
+    for loss in loss_colors_list:
+        loss_color += loss
 
     input_image_plus = tf.squeeze(input_image + mean_pixel, [0])
 
-    #styleswap_loss
 
-    # content_swap_layers_const = [ vgg_var.conv3_1, vgg_var.conv4_1, vgg_var.conv5_1]
-    # style_swap_layers_const = [ vgg_var.conv3_1, vgg_var.conv4_1, vgg_var.conv5_1]
-    # output_swap_layers_const = [ vgg_var.conv3_1, vgg_var.conv4_1, vgg_var.conv5_1]
-    # content_masks1,style_masks1 = load_seg(args.content_seg_path, args.style_seg_path, [content_width, content_height], [style_width, style_height])
-    # styleswap_loss_list = swap_loss(layer_structure_all,content_swap_layers_const,style_swap_layers_const,output_swap_layers_const,content_masks1, style_masks1, float(args.style_weight))
+    colorswap_loss = 0.0
 
-    styleswap_loss = 0.0
-    # for loss in styleswap_loss_list:
-    #     styleswap_loss += loss
 
-  #   styleswap = style_swap(content_conv1_1_const, style_conv1_1_const)
-  #   styleswap = sess.run(styleswap)
-  # #  styleswap = tf.constant(styleswap)
-  #   styleswap_loss += tf.reduce_mean(tf.squared_difference(styleswap, content_conv1_1_var)) * args.swapweight
+  #   colorswap = color_swap(content_conv1_1_const, color_conv1_1_const)
+  #   colorswap = sess.run(colorswap)
+  # #  colorswap = tf.constant(colorswap)
+  #   colorswap_loss += tf.reduce_mean(tf.squared_difference(colorswap, content_conv1_1_var)) * args.swapweight
   # # #
-  #   styleswap = style_swap(content_conv2_1_const, style_conv2_1_const)
-  #   styleswap = sess.run(styleswap)
-  #   #styleswap = tf.constant(styleswap)
-  #   styleswap_loss += tf.reduce_mean(tf.squared_difference(styleswap, content_conv2_1_var)) * args.swapweight
+  #   colorswap = color_swap(content_conv2_1_const, color_conv2_1_const)
+  #   colorswap = sess.run(colorswap)
+  #   #colorswap = tf.constant(colorswap)
+  #   colorswap_loss += tf.reduce_mean(tf.squared_difference(colorswap, content_conv2_1_var)) * args.swapweight
   #
-    styleswap = style_swap(content_conv3_1_const, style_conv3_1_const)
-    styleswap = sess.run(styleswap)
-    # styleswap = tf.constant(styleswap)
-    styleswap_loss += tf.reduce_mean(tf.squared_difference(styleswap, content_conv3_1_var)) * args.swapweight
+    colorswap = color_swap(content_conv3_1_const, color_conv3_1_const)
+    colorswap = sess.run(colorswap)
+    colorswap_loss += tf.reduce_mean(tf.squared_difference(colorswap, content_conv3_1_var)) * args.swapweight
 
-    styleswap = style_swap(content_conv4_1_const, style_conv4_1_const)
-    styleswap = sess.run(styleswap)
-    # styleswap = tf.constant(styleswap)
-    styleswap_loss += tf.reduce_mean(tf.squared_difference(styleswap, content_conv4_1_var)) * args.swapweight
+    colorswap = color_swap(content_conv4_1_const, color_conv4_1_const)
+    colorswap = sess.run(colorswap)
+    colorswap_loss += tf.reduce_mean(tf.squared_difference(colorswap, content_conv4_1_var)) * args.swapweight
 
-    styleswap = style_swap(content_conv5_1_const, style_conv5_1_const)
-    styleswap = sess.run(styleswap)
-    # styleswap = tf.constant(styleswap)
-    styleswap_loss += tf.reduce_mean(tf.squared_difference(styleswap, content_conv5_1_var)) * args.swapweight
+    colorswap = color_swap(content_conv5_1_const, color_conv5_1_const)
+    colorswap = sess.run(colorswap)
+    colorswap_loss += tf.reduce_mean(tf.squared_difference(colorswap, content_conv5_1_var)) * args.swapweight
 
     # Affine Loss
     if Matting:
-        # loss_affine = affine_loss(input_image_plus, M, args.affine_weight)
-        loss_affine,output_image,content_h= y_loss(content_image1,input_image_plus,args.affine_weight)
-        # loss_content = tf.constant(0.00001)
+        loss_affine,output_image,content_h= y_loss(content_image1,input_image_plus,args.Y_loss_weight)
     else:
         loss_affine = tf.constant(0.00001)  # junk value
-        # loss_content = tf.constant(0.00001)
 
     # Total Variational Loss
     loss_tv = total_variation_loss(input_image, float(args.tv_weight))
 
     if args.lbfgs:
         if not Matting:
-            # overall_loss = loss_content + loss_tv + loss_style+ shape_loss loss_content +
-            overall_loss = loss_content + loss_tv + loss_style
+            overall_loss = loss_content + loss_tv + loss_color
         else:
-            # overall_loss = loss_content + loss_style + loss_tv + + loss_style+ shape_loss+ loss_affine + styleswap_loss
-            overall_loss = loss_content + loss_tv + loss_affine + loss_style+ styleswap_loss
+            overall_loss = loss_content + loss_tv + loss_affine + loss_color+ colorswap_loss
 
         optimizer = tf.contrib.opt.ScipyOptimizerInterface(overall_loss, method='L-BFGS-B', options={'maxiter': args.max_iter, 'disp': 0})
         sess.run(tf.global_variables_initializer())
 
         print_loss_partial = partial(print_loss, args)
-        # optimizer.minimize(sess, fetches=[loss_content, loss_styles_list, loss_tv, loss_affine, styleswap_loss,, overall_loss, input_image_plus,output_image,content_h], loss_callback=print_loss_partial)
-        optimizer.minimize(sess, fetches=[ loss_content, loss_styles_list, loss_tv, loss_affine,styleswap_loss, overall_loss, input_image_plus,loss_style], loss_callback=print_loss_partial)
-        global min_loss, best_image, iter_count,loss_content1, loss_yloss,loss_styleloss,loss_styleswaploss,loss_overallloss
+        optimizer.minimize(sess, fetches=[ loss_content, loss_colors_list, loss_tv, loss_affine,colorswap_loss, overall_loss, input_image_plus,loss_color], loss_callback=print_loss_partial)
+        global min_loss, best_image, iter_count,loss_content1, loss_yloss,loss_colorloss,loss_colorswaploss,loss_overallloss
         best_result = copy.deepcopy(best_image)
-        min_loss, best_image = float("inf"), None
-        loss1 = copy.deepcopy(loss_content1)
-        loss2 = copy.deepcopy(loss_yloss)
-        loss3 = copy.deepcopy(loss_styleloss)
-        loss4 = copy.deepcopy(loss_styleswaploss)
-        loss5 = copy.deepcopy(loss_overallloss)
-        loss_content1 = []
-        loss_yloss = []
-        loss_styleloss = []
-        loss_styleswaploss = []
-        loss_overallloss = []
+        min_loss, best_image = float("inf"), None 
         iter_count = 0
         end = time.time()
-        print(end-start)
-        t1,t2,t3,t4,t5,t6,t7,t8,t9,t10 = pickle.load(open('./time.pkl'))
-        losses = [t1,t2,t3,t4,t5,t6,t7,t8,t9,t10,(end-start)]
-        with open('time.pkl', 'w')as f:
-            pickle.dump(losses, f)
+#        print(end-start)
         sess.close()
-        return best_result,loss1,loss2,loss3,loss4,loss5
-    else:
-        VGGNetLoss = loss_content + loss_tv + loss_style
-        optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate, beta1=0.9, beta2=0.999, epsilon=1e-08)
-        VGG_grads = optimizer.compute_gradients(VGGNetLoss, [input_image])
-
-        if Matting:
-            b, g, r = tf.unstack(input_image_plus / 255., axis=-1)
-            b_gradient = tf.transpose(tf.reshape(2 * tf.sparse_tensor_dense_matmul(M, tf.expand_dims(tf.reshape(tf.transpose(b), [-1]), -1)), [content_width, content_height]))
-            g_gradient = tf.transpose(tf.reshape(2 * tf.sparse_tensor_dense_matmul(M, tf.expand_dims(tf.reshape(tf.transpose(g), [-1]), -1)), [content_width, content_height]))
-            r_gradient = tf.transpose(tf.reshape(2 * tf.sparse_tensor_dense_matmul(M, tf.expand_dims(tf.reshape(tf.transpose(r), [-1]), -1)), [content_width, content_height]))
-
-            Matting_grad = tf.expand_dims(tf.stack([b_gradient, g_gradient, r_gradient], axis=-1), 0) / 255. * args.affine_weight
-            VGGMatting_grad = [(VGG_grad[0] + Matting_grad, VGG_grad[1]) for VGG_grad in VGG_grads]
-
-            train_op = optimizer.apply_gradients(VGGMatting_grad)
-        else:
-            train_op = optimizer.apply_gradients(VGG_grads)
-
-        sess.run(tf.global_variables_initializer())
-        min_loss, best_image = float("inf"), None
-        for i in xrange(1, args.max_iter):
-            _, loss_content_, loss_styles_list_, loss_tv_, loss_affine_, overall_loss_, output_image_ = sess.run([
-                train_op, loss_content, loss_styles_list, loss_tv, loss_affine, VGGNetLoss, input_image_plus
-            ])
-            if i % args.print_iter == 0:
-                print('Iteration {} / {}\n\tContent loss: {}'.format(i, args.max_iter, loss_content_))
-                for j, style_loss_ in enumerate(loss_styles_list_):
-                    print('\tStyle {} loss: {}'.format(j + 1, style_loss_))
-                print('\tTV loss: {}'.format(loss_tv_))
-                if Matting:
-                    print('\tAffine loss: {}'.format(loss_affine_))
-                print('\tTotal loss: {}'.format(overall_loss_ - loss_tv_))
-
-            if overall_loss_ < min_loss:
-                min_loss, best_image = overall_loss_, output_image_
-
-            if i % args.save_iter == 0 and i != 0:
-                save_result(best_image[:, :, ::-1], os.path.join(args.serial, 'out_iter_{}_1.png'.format(i)))
-
-        return best_image
-
+        return best_result
 if __name__ == "__main__":
-    stylize()
+    colorize()
