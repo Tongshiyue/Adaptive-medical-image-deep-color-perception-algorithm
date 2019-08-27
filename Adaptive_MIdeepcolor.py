@@ -5,7 +5,7 @@ import csv
 import numpy as np
 import pickle
 import os
-from photo_style import stylize
+from photo_color import colorize
 import matplotlib.pyplot as plt
 import imagehash
 import shelve
